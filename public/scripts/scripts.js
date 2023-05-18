@@ -76,18 +76,20 @@ window.addEventListener('load', function () {
       context.beginPath();
       context.arc(this.collisionX, this.collisionY, this.collisionRadius, 0, Math.PI * 2);
 
-      // Wraps the hit box to affect the transparency with globalAlpha
-      // Only applies globalAlpha to the player, not the whole game
-      context.save();
-      context.globalAlpha = 0.5;
-      context.fill();
-      context.restore();
-      context.stroke();
+      if (this.game.debug) {
+        // Wraps the hit box to affect the transparency with globalAlpha
+        // Only applies globalAlpha to the player, not the whole game
+        context.save();
+        context.globalAlpha = 0.5;
+        context.fill();
+        context.restore();
+        context.stroke();
 
-      context.beginPath();
-      context.moveTo(this.collisionX, this.collisionY);
-      context.lineTo(this.game.mouse.x, this.game.mouse.y);
-      context.stroke();
+        context.beginPath();
+        context.moveTo(this.collisionX, this.collisionY);
+        context.lineTo(this.game.mouse.x, this.game.mouse.y);
+        context.stroke();
+      }
     }
 
     update() {
@@ -151,7 +153,7 @@ window.addEventListener('load', function () {
       this.game = game;
       this.spriteWidth = 250;
       this.spriteHeight = 250;
-      this.collisionRadius = 60;
+      this.collisionRadius = 40;
       this.width = this.spriteWidth;
       this.height = this.spriteHeight;
 
@@ -181,16 +183,18 @@ window.addEventListener('load', function () {
         this.height,
       );
 
-      context.beginPath();
-      context.arc(this.collisionX, this.collisionY, this.collisionRadius, 0, Math.PI * 2);
+      if (this.game.debug) {
+        context.beginPath();
+        context.arc(this.collisionX, this.collisionY, this.collisionRadius, 0, Math.PI * 2);
 
-      // Wraps the hit box to affect the transparency with globalAlpha
-      // Only applies globalAlpha to the player, not the whole game
-      context.save();
-      context.globalAlpha = 0.5;
-      context.fill();
-      context.restore();
-      context.stroke();
+        // Wraps the hit box to affect the transparency with globalAlpha
+        // Only applies globalAlpha to the player, not the whole game
+        context.save();
+        context.globalAlpha = 0.5;
+        context.fill();
+        context.restore();
+        context.stroke();
+      }
     }
   }
 
@@ -201,6 +205,7 @@ window.addEventListener('load', function () {
     constructor(canvas) {
       this.canvas = canvas;
       this.topMargin = 260;
+      this.debug = false;
       this.width = this.canvas.width;
       this.height = this.canvas.height;
       this.player = new Player(this);
@@ -233,6 +238,12 @@ window.addEventListener('load', function () {
         if (this.mouse.pressed) {
           this.mouse.x = event.offsetX;
           this.mouse.y = event.offsetY;
+        }
+      });
+
+      window.addEventListener('keydown', event => {
+        if (event.key == 'D' || event.key == 'd') {
+          this.debug = !this.debug;
         }
       });
     }
