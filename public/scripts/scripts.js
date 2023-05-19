@@ -28,7 +28,7 @@ window.addEventListener('load', function () {
   context.lineWidth = 3;
   context.fillStyle = 'white';
   context.textAlign = 'center';
-  context.strokeStyle = 'white';
+  context.strokeStyle = 'black';
   context.font = '40px Helvetica';
 
   /**
@@ -238,7 +238,7 @@ window.addEventListener('load', function () {
       this.height = this.spriteHeight;
 
       this.hatchTimer = 0;
-      this.hatchInterval = 5000;
+      this.hatchInterval = 10000;
       this.markedForDeletion = false;
     }
 
@@ -281,7 +281,7 @@ window.addEventListener('load', function () {
       });
 
       // Hatching
-      if (this.hatchTimer > this.hatchInterval) {
+      if (this.hatchTimer > this.hatchInterval || this.collisionY < this.game.topMargin) {
         this.game.hatchlings.push(new Larva(this.game, this.collisionX, this.collisionY));
         this.markedForDeletion = true;
         this.game.removeGameObjects();
@@ -353,6 +353,10 @@ window.addEventListener('load', function () {
         this.markedForDeletion = true;
         this.game.removeGameObjects();
         this.game.score++;
+
+        for (let i = 0; i < 3; i++) {
+          this.game.particles.push(new Firefly(this.game, this.collisionX, this.collisionY, `yellow`));
+        }
       }
 
       // Collision with objects & Player
@@ -374,6 +378,10 @@ window.addEventListener('load', function () {
           this.markedForDeletion = true;
           this.game.removeGameObjects();
           this.game.lostHatchlings++;
+
+          for (let i = 0; i < 5; i++) {
+            this.game.particles.push(new Spark(this.game, this.collisionX, this.collisionY, `red`));
+          }
         }
       });
     }
@@ -442,6 +450,69 @@ window.addEventListener('load', function () {
   }
 
   /**
+   * The Particle Class
+   */
+  class Particle {
+    constructor(game, x, y, color) {
+      this.game = game;
+      this.color = color;
+      this.collisionX = x;
+      this.collisionY = y;
+      this.angle = 0;
+      this.markedForDeletion = false;
+      this.va = Math.random() * 0.1 + 0.01;
+      this.speedX = Math.random() * 6 - 3;
+      this.speedY = Math.random() * 2 + 0.5;
+      this.radius = Math.floor(Math.random() * 10 + 5);
+    }
+
+    draw(context) {
+      context.save();
+      context.fillStyle = this.color;
+      context.beginPath();
+      context.arc(this.collisionX, this.collisionY, this.radius, 0, Math.PI * 2);
+      context.fill();
+      context.stroke();
+      context.restore();
+    }
+  }
+
+  /**
+   * The Spark Class. This is when the enemy eats the larva
+   */
+  class Spark extends Particle {
+    update() {
+      this.angle += this.va * 0.5;
+      this.collisionX -= Math.cos(this.angle) * this.speedX;
+      this.collisionY -= Math.sin(this.angle) * this.speedY;
+      
+      if (this.radius > 0.1) {
+        this.radius -= 0.05;
+      }
+
+      if (this.radius < 0.2) {
+        this.markedForDeletion = true;
+        this.game.removeGameObjects();
+      }
+    }
+  }
+
+  /**
+   * The Firefly Class. This is when the larva makes it to the safety of the forest.
+   */
+  class Firefly extends Particle {
+    update() {
+      this.angle += this.va;
+      this.collisionX += Math.cos(this.angle) * this.speedX;
+      this.collisionY -= this.speedY;
+      if (this.collisionY < 0 - this.radius) {
+        this.markedForDeletion = true;
+        this.game.removeGameObjects();
+      }
+    }
+  }
+
+  /**
    * The Game Class
    */
   class Game {
@@ -465,6 +536,8 @@ window.addEventListener('load', function () {
       this.player = new Player(this);
 
       this.score = 0;
+
+      this.particles = [];
 
       // The game eggs
       this.eggs = [];
@@ -519,7 +592,14 @@ window.addEventListener('load', function () {
       if (this.timer > this.interval) {
         context.clearRect(0, 0, canvas.width, canvas.height);
 
-        this.gameObjects = [this.player, ...this.eggs, ...this.obstacles, ...this.enemies, ...this.hatchlings];
+        this.gameObjects = [
+          this.player,
+          ...this.eggs,
+          ...this.obstacles,
+          ...this.enemies,
+          ...this.hatchlings,
+          ...this.particles,
+        ];
 
         // Sort by vertical position
         this.gameObjects.sort((lhs, rhs) => {
@@ -544,6 +624,17 @@ window.addEventListener('load', function () {
       } else {
         this.eggTimer += deltaTime;
       }
+
+      // Draw status text
+      context.save();
+      context.textAlign = 'left';
+      context.fillText('Score: ' + this.score, 25, 50);
+
+      if (this.debug) {
+        context.fillText('Lost Hatchlings: ' + this.lostHatchlings, 25, 100);
+      }
+
+      context.restore();
     }
 
     checkCollision(lhs, rhs) {
@@ -565,6 +656,7 @@ window.addEventListener('load', function () {
     removeGameObjects() {
       this.eggs = this.eggs.filter(object => !object.markedForDeletion);
       this.hatchlings = this.hatchlings.filter(object => !object.markedForDeletion);
+      this.particles = this.particles.filter(object => !object.markedForDeletion);
     }
 
     init() {
