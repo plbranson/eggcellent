@@ -16,8 +16,6 @@
 
 'use strict';
 
-// TODO: Fix Egg glitch
-
 window.addEventListener('load', function () {
   const canvas = document.getElementById('background-canvas');
   const context = canvas.getContext('2d');
@@ -29,7 +27,9 @@ window.addEventListener('load', function () {
   // Overrides the context values
   context.lineWidth = 3;
   context.fillStyle = 'white';
+  context.textAlign = 'center';
   context.strokeStyle = 'white';
+  context.font = '40px Helvetica';
 
   /**
    * The Player Class
@@ -49,14 +49,14 @@ window.addEventListener('load', function () {
 
       this.spriteX;
       this.spriteY;
-      this.spriteWidth = 255;
-      this.spriteHeight = 255;
+      this.spriteWidth = 256;
+      this.spriteHeight = 256;
 
       this.width = this.spriteWidth;
       this.height = this.spriteHeight;
 
       this.frameX = 0;
-      this.frameY;
+      this.frameY = 0;
 
       this.bullImage = document.getElementById('bull');
     }
@@ -75,10 +75,10 @@ window.addEventListener('load', function () {
         this.height,
       );
 
-      context.beginPath();
-      context.arc(this.collisionX, this.collisionY, this.collisionRadius, 0, Math.PI * 2);
-
       if (this.game.debug) {
+        context.beginPath();
+        context.arc(this.collisionX, this.collisionY, this.collisionRadius, 0, Math.PI * 2);
+
         // Wraps the hit box to affect the transparency with globalAlpha
         // Only applies globalAlpha to the player, not the whole game
         context.save();
@@ -256,7 +256,10 @@ window.addEventListener('load', function () {
         context.fill();
         context.restore();
         context.stroke();
-        context.fillText(this.hatchTimer,this.collisionX, this.collisionY)
+
+        // Shows the Egg hatch timer
+        const displayTimer = (this.hatchTimer * 0.001).toFixed(0);
+        context.fillText(displayTimer, this.collisionX, this.collisionY - this.collisionRadius * 2.5);
       }
     }
 
@@ -279,6 +282,7 @@ window.addEventListener('load', function () {
 
       // Hatching
       if (this.hatchTimer > this.hatchInterval) {
+        this.game.hatchlings.push(new Larva(this.game, this.collisionX, this.collisionY));
         this.markedForDeletion = true;
         this.game.removeGameObjects();
       } else {
@@ -304,17 +308,74 @@ window.addEventListener('load', function () {
       this.width = this.spriteWidth;
       this.height = this.spriteHeight;
 
+      this.markedForDeletion = false;
+
+      this.frameX = 0;
+      this.frameY = Math.floor(Math.random() * 2);
+
       this.larvaImage = document.getElementById('larva');
     }
 
     draw(context) {
-      context.drawImage(this.larvaImage, this.spriteX, this.spriteY);
+      context.drawImage(
+        this.larvaImage,
+        this.frameX * this.spriteWidth,
+        this.frameY * this.spriteHeight,
+        this.spriteWidth,
+        this.spriteHeight,
+        this.spriteX,
+        this.spriteY,
+        this.width,
+        this.height,
+      );
+
+      if (this.game.debug) {
+        context.beginPath();
+        context.arc(this.collisionX, this.collisionY, this.collisionRadius, 0, Math.PI * 2);
+
+        // Wraps the hit box to affect the transparency with globalAlpha
+        // Only applies globalAlpha to the player, not the whole game
+        context.save();
+        context.globalAlpha = 0.5;
+        context.fill();
+        context.restore();
+        context.stroke();
+      }
     }
 
     update() {
       this.collisionY -= this.speedY;
       this.spriteX = this.collisionX - this.width * 0.5;
-      this.spriteY = this.collisionY - this.height * 0.5;
+      this.spriteY = this.collisionY - this.height * 0.5 - 50;
+
+      // Moved to Safety
+      if (this.collisionY < this.game.topMargin) {
+        this.markedForDeletion = true;
+        this.game.removeGameObjects();
+        this.game.score++;
+      }
+
+      // Collision with objects & Player
+      let collisionObjects = [this.game.player, ...this.game.obstacles];
+      collisionObjects.forEach(object => {
+        let [collision, distance, sumOfRadii, dx, dy] = this.game.checkCollision(this, object);
+
+        if (collision) {
+          const unitVectorX = dx / distance;
+          const unitVectorY = dy / distance;
+          this.collisionX = object.collisionX + (sumOfRadii + 1) * unitVectorX;
+          this.collisionY = object.collisionY + (sumOfRadii + 1) * unitVectorY;
+        }
+      });
+
+      // Collision with Enemies
+      this.game.enemies.forEach(enemy => {
+        if (this.game.checkCollision(this, enemy)[0]) {
+          this.markedForDeletion = true;
+          this.game.removeGameObjects();
+          this.game.lostHatchlings++;
+        }
+      });
     }
   }
 
@@ -403,9 +464,15 @@ window.addEventListener('load', function () {
       this.height = this.canvas.height;
       this.player = new Player(this);
 
+      this.score = 0;
+
       // The game eggs
       this.eggs = [];
       this.maximumNumberOfEggs = 10;
+
+      // The game hatchlings
+      this.hatchlings = [];
+      this.lostHatchlings = 0;
 
       // The game enemies
       this.enemies = [];
@@ -452,7 +519,7 @@ window.addEventListener('load', function () {
       if (this.timer > this.interval) {
         context.clearRect(0, 0, canvas.width, canvas.height);
 
-        this.gameObjects = [this.player, ...this.eggs, ...this.obstacles, ...this.enemies];
+        this.gameObjects = [this.player, ...this.eggs, ...this.obstacles, ...this.enemies, ...this.hatchlings];
 
         // Sort by vertical position
         this.gameObjects.sort((lhs, rhs) => {
@@ -497,6 +564,7 @@ window.addEventListener('load', function () {
 
     removeGameObjects() {
       this.eggs = this.eggs.filter(object => !object.markedForDeletion);
+      this.hatchlings = this.hatchlings.filter(object => !object.markedForDeletion);
     }
 
     init() {
@@ -552,7 +620,7 @@ window.addEventListener('load', function () {
    */
   function animate(timeStamp) {
     const deltaTime = timeStamp - lastTime;
-    lastTime = deltaTime;
+    lastTime = timeStamp;
 
     game.render(context, deltaTime);
     requestAnimationFrame(animate);
